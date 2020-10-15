@@ -1,12 +1,12 @@
 TARGET = main
 CFLAGS = -g -Wextra
-PARAMS = 200 120 perlin 125
-LIBS = -lm -lpthread -lSDL2
+PARAMS = 240 120 perlin 125
+LIBS = -lm -lSDL2
 
 HEADERS = $(wildcard *.h)
 OBJECTS = $(patsubst %.c, %.o, $(wildcard *.c))
 
-.PHONY: all run clean debug memcheck
+.PHONY: all run clean debug valgrind
 
 all: $(TARGET)
 
@@ -26,5 +26,5 @@ run: $(TARGET)
 debug: $(TARGET)
 	gdb -ex="break main" -ex="layout next" -ex="run" --args ./$(TARGET) $(PARAMS)
 
-memcheck: $(TARGET)
+valgrind: $(TARGET)
 	valgrind --leak-check=full ./$(TARGET) $(PARAMS)

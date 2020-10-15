@@ -9,13 +9,14 @@
 
 #include <SDL2/SDL.h>
 
-#define WINDOW_TITLE "Once again I am thinking of an amazing title"
+#define WINDOW_TITLE "Conways Game of Life"
 #define GRID_TO_WINDOW_SCALE 10
 #define FPS 500
 #define MSPT 1000 / FPS
-#define FRAMESKIPS 100
+#define FRAMESKIPS 10
 #define SKIPS_INCREMENT 10
 #define MUTATION_THREASHOLD 3
+#define WINDOW_FLAGS SDL_WINDOW_OPENGL// | SDL_WINDOW_MAXIMIZED
 
 #define RUNNING 0x00
 #define PAUSE 0x11
@@ -532,7 +533,7 @@ uint32_t Init(sdl_enviroment *sdl_env, convey_enviroment *con_env, char **argv, 
         SDL_WINDOWPOS_CENTERED,
         GRID_TO_WINDOW_SCALE * con_env->grid_size[0],
         GRID_TO_WINDOW_SCALE * con_env->grid_size[1],
-        SDL_WINDOW_OPENGL //| SDL_WINDOW_MAXIMIZED
+        WINDOW_FLAGS
     );
     if (!sdl_env->window)
     {
@@ -549,16 +550,6 @@ uint32_t Init(sdl_enviroment *sdl_env, convey_enviroment *con_env, char **argv, 
     {
         fprintf(stderr, "Error creating renderer:\n%s\n", SDL_GetError());
         return 4;
-    }
-
-    sdl_env->surface = SDL_CreateRGBSurface(0,
-        con_env->grid_size[0] * GRID_TO_WINDOW_SCALE,
-        con_env->grid_size[1] * GRID_TO_WINDOW_SCALE,
-        32, 0, 0, 0, 0);
-    if (!sdl_env->surface)
-    {
-        fprintf(stderr, "Error creating surface:\n%s\n", SDL_GetError());
-        return 5;
     }
 
     sdl_env->rects = (SDL_Rect *) malloc(sizeof(SDL_Rect) * con_env->grid_size[2]);
@@ -617,6 +608,12 @@ uint32_t Exit(sdl_enviroment *sdl_env, convey_enviroment *con_env)
     SDL_DestroyWindow(sdl_env->window);
 
     free(sdl_env->rects);
+
+    for (uint32_t x = 0; x < con_env->grid_size[0]; x++)
+    {
+        free(con_env->grid[x]);
+        free(con_env->swp_grid[x]);
+    }
 
     free(con_env->grid);
     free(con_env->swp_grid);
