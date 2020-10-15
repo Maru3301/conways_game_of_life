@@ -31,3 +31,10 @@ Every cell is initiallized randomly with random() % 2
 
 **perlin:**
 Perlin Noise, influenced (badly) by density, where density is a number between 0 and 255
+
+---
+
+Compile (on Linux) with **make**  
+**make run** executes it with some parameters  
+**make debug** starts gdb with breakpoint at main and layout  
+**make valgrind** runs valgrind with leak-check full
