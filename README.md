@@ -4,8 +4,12 @@
 This is a little project of mine, nothing fancy.
 </head>
 <body>
+<div>
 Usage: ./main \<Cells x\> \<Cells y\> \<Initializer\> \<Intitializer args\>
-        Initializer is one of:
+</div>
+<div>
+Initializer is one of:
+</div>
                 glider
                 acorn
                 blunt_random
