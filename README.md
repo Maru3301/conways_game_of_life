@@ -1,4 +1,4 @@
-# `Conways game of life`
+# `John Conways game of life`
 ---
 
 C implementation of the well known  
@@ -30,4 +30,4 @@ A simple structure starting in the center that expands surprisingly much
 Every cell is initiallized randomly with random() % 2
 
 **perlin:**
-Perlin Noise, influenced (badly) by density
+Perlin Noise, influenced (badly) by density, where density is a number between 0 and 255
