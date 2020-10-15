@@ -9,11 +9,12 @@
 
 #include <SDL2/SDL.h>
 
-#define WINDOW_TITLE "Again I am thinking of an amazing title"
+#define WINDOW_TITLE "Once again I am thinking of an amazing title"
 #define GRID_TO_WINDOW_SCALE 10
 #define FPS 144
-#define FRAMESKIPS 144
 #define MSPT 1000 / FPS
+#define FRAMESKIPS 100
+#define SKIPS_INCREMENT 10
 
 #define RUNNING 0x00
 #define PAUSE 0x11
@@ -36,12 +37,14 @@ typedef struct{
 
     uint8_t flag;
 
+    uint32_t frameskips;
+
     clock_t frame_start_time, frame_finish_time;
     double time_delta;
 } sdl_enviroment;
 
 uint32_t renderer(sdl_enviroment *sdl_env, convey_enviroment *con_env);
-uint32_t event_handler(SDL_Event e, uint8_t *flag);
+uint32_t event_handler(SDL_Event e, uint8_t *flag, uint32_t *frameskips);
 
 uint32_t convey_init(convey_enviroment *con_env);
 uint32_t convey_advance_generation(convey_enviroment *con_env);
@@ -50,6 +53,10 @@ uint32_t Init(sdl_enviroment *sdl_env, convey_enviroment *con_env, char **argv);
 uint32_t Exit(sdl_enviroment *sdl_env, convey_enviroment *con_env);
 
 uint32_t str_to_int(char *string, uint64_t *number);
+
+// Various Init functions for different start scenarios
+uint32_t blunt_random(convey_enviroment *con_env);
+uint32_t glider_start(convey_enviroment *con_env);
 
 /*
 Main
@@ -77,9 +84,9 @@ int main(int argc, char **argv)
     while (sdl_env->flag != QUIT_GAME)
     {
         sdl_env->frame_start_time = clock();
-        event_handler(sdl_env->e, &sdl_env->flag);
+        event_handler(sdl_env->e, &sdl_env->flag, &sdl_env->frameskips);
 
-        if (frame % FRAMESKIPS == 0)
+        if (frame % sdl_env->frameskips == 0)
         {
             if (sdl_env->flag != PAUSE)
             {
@@ -121,9 +128,13 @@ Convey Logic
 
 uint32_t convey_advance_generation(convey_enviroment *con_env)
 {
-    uint8_t sum;
-    uint64_t x_index;
-    uint64_t y_index;
+    // Having random mutations sounds like fun!
+    // Then initialize all to 0 and wait for life to form
+    // Need to adjust the rules tho, else it would die
+
+    int8_t sum;
+    int64_t x_index;
+    int64_t y_index;
 
     for (uint64_t x = 0; x < con_env->grid_size[0]; x++)
     {
@@ -143,13 +154,19 @@ uint32_t convey_advance_generation(convey_enviroment *con_env)
                 }
             }
 
+            sum -= con_env->grid[x][y];
+
             if (sum < 2 | sum > 3)
             {
                 con_env->swp_grid[x][y] = 0;
             }
-            else
+            else if (sum == 3)
             {
                 con_env->swp_grid[x][y] = 1;
+            }
+            else
+            {
+                con_env->swp_grid[x][y] = con_env->grid[x][y];
             }
         }
     }
@@ -167,6 +184,49 @@ uint32_t convey_init(convey_enviroment *con_env)
 {
     // maybe later perlin noise?
 
+    // blunt_random(con_env);
+    glider_start(con_env);
+
+    // Copy once to swp_grid so we're on the same page
+    for (uint64_t x = 0; x < con_env->grid_size[0]; x++)
+    {
+        for (uint64_t y = 0; y < con_env->grid_size[1]; y++)
+        {
+            con_env->swp_grid[x][y] = con_env->grid[x][y];
+        }
+    }
+
+    return 0;
+}
+
+uint32_t glider_start(convey_enviroment *con_env)
+{
+    // Make sure all is zero = dead
+    for (uint64_t x = 0; x < con_env->grid_size[0]; x++)
+    {
+        for (uint64_t y = 0; y < con_env->grid_size[1]; y++)
+        {
+            con_env->grid[x][y] = 0;
+        }
+    }
+
+    // Add a glider
+    con_env->grid[1][0] = 1;
+    con_env->grid[2][1] = 1;
+    con_env->grid[0][2] = 1;
+    con_env->grid[1][2] = 1;
+    con_env->grid[2][2] = 1;
+
+    // con_env->grid[5][6] = 1;
+    // con_env->grid[6][5] = 1;
+    // con_env->grid[7][6] = 1;
+
+    return 0;
+}
+
+// Various Init functions starting here
+uint32_t blunt_random(convey_enviroment *con_env)
+{
     for (uint64_t x = 0; x < con_env->grid_size[0]; x++)
     {
         for (uint64_t y = 0; y < con_env->grid_size[1]; y++)
@@ -174,6 +234,8 @@ uint32_t convey_init(convey_enviroment *con_env)
             con_env->grid[x][y] = random() % 2;
         }
     }
+
+    return 0;
 }
 
 /*
@@ -221,10 +283,8 @@ uint32_t renderer(sdl_enviroment *sdl_env, convey_enviroment *con_env)
     return 0;
 }
 
-uint32_t event_handler(SDL_Event e, uint8_t *flag)
+uint32_t event_handler(SDL_Event e, uint8_t *flag, uint32_t *frameskips)
 {
-    SDL_Keycode key;
-
     if (SDL_PollEvent(&e))
     {
         if (e.type == SDL_QUIT)
@@ -233,20 +293,36 @@ uint32_t event_handler(SDL_Event e, uint8_t *flag)
         }
         else if (e.type == SDL_KEYDOWN)
         {
-            key = e.key.keysym.sym;
+            // printf("Pressed: %d = %s\n", e.key.keysym.scancode, SDL_GetKeyName(key));
 
-            printf("Pressed: %d = %s\n", e.key.keysym.scancode, SDL_GetKeyName(key));
+            switch (e.key.keysym.sym)
+            {
+                case SDLK_ESCAPE:
+                    if (*flag != PAUSE)
+                        *flag = PAUSE;
+                    else
+                        *flag = RUNNING;
+                    break;
 
-            if (key == SDLK_ESCAPE)
-            {
-                if (*flag != PAUSE)
-                    *flag = PAUSE;
-                else
-                    *flag = RUNNING;
-            }
-            else if (key == SDLK_q)
-            {
-                *flag = QUIT_GAME;
+                case SDLK_q:
+                    *flag = QUIT_GAME;
+                    break;
+
+                // Equiv. to the inverse of the simulation speed
+                // Don't you agree linear is a bad choice?
+                // Change that later maybe. Or don't.
+
+                case SDLK_PLUS:
+                    if (*frameskips > 10)
+                        *frameskips -= SKIPS_INCREMENT;
+                    break;
+
+                case SDLK_MINUS:
+                    *frameskips += SKIPS_INCREMENT;
+                    break;
+
+                default:
+                    printf("Pressed Key does not have an effect: %s\n", SDL_GetKeyName(e.key.keysym.sym));
             }
         }
     }
@@ -287,7 +363,7 @@ uint32_t Init(sdl_enviroment *sdl_env, convey_enviroment *con_env, char **argv)
         SDL_WINDOWPOS_CENTERED,
         GRID_TO_WINDOW_SCALE * con_env->grid_size[0],
         GRID_TO_WINDOW_SCALE * con_env->grid_size[1],
-        SDL_WINDOW_OPENGL | SDL_WINDOW_MAXIMIZED
+        SDL_WINDOW_OPENGL //| SDL_WINDOW_MAXIMIZED
     );
     if (!sdl_env->window)
     {
@@ -322,6 +398,8 @@ uint32_t Init(sdl_enviroment *sdl_env, convey_enviroment *con_env, char **argv)
         fprintf(stderr, "Memory allocation failed for sdl_env->rects\n");
         return 6;
     }
+
+    sdl_env->frameskips = FRAMESKIPS;
 
     // Prepare Convey
     con_env->grid = (uint8_t **) malloc(con_env->grid_size[0] * sizeof(uint8_t *));
