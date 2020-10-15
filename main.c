@@ -11,7 +11,7 @@
 
 #define WINDOW_TITLE "Once again I am thinking of an amazing title"
 #define GRID_TO_WINDOW_SCALE 10
-#define FPS 144
+#define FPS 500
 #define MSPT 1000 / FPS
 #define FRAMESKIPS 100
 #define SKIPS_INCREMENT 10
@@ -132,7 +132,7 @@ uint32_t convey_advance_generation(convey_enviroment *con_env)
     // Then initialize all to 0 and wait for life to form
     // Need to adjust the rules tho, else it would die
 
-    int8_t sum;
+    int32_t sum;
     int64_t x_index;
     int64_t y_index;
 
@@ -142,13 +142,13 @@ uint32_t convey_advance_generation(convey_enviroment *con_env)
         {
             sum = 0;
 
-            for (int8_t i = -1; i <= 1; i++)
+            for (int64_t i = -1; i <= 1; i++)
             {
-                x_index = (x + i) % con_env->grid_size[0];
+                x_index = (x + i + con_env->grid_size[0]) % con_env->grid_size[0];
 
-                for (int8_t j = -1; j <= 1; j++)
+                for (int64_t j = -1; j <= 1; j++)
                 {
-                    y_index = (y + j) % con_env->grid_size[1];
+                    y_index = (y + j + con_env->grid_size[1]) % con_env->grid_size[1];
 
                     sum += con_env->grid[x_index][y_index];
                 }
@@ -172,11 +172,9 @@ uint32_t convey_advance_generation(convey_enviroment *con_env)
     }
 
     // Swap the arrays in the end
-    //printf("%lx & %lx -> ", con_env->grid, con_env->swp_grid);
     uint8_t **temp = con_env->swp_grid;
     con_env->swp_grid = con_env->grid;
     con_env->grid = temp;
-    //printf("%lx & %lx\n", con_env->grid, con_env->swp_grid);
     return 0;
 }
 
@@ -202,6 +200,8 @@ uint32_t convey_init(convey_enviroment *con_env)
 uint32_t glider_start(convey_enviroment *con_env)
 {
     // Make sure all is zero = dead
+    // Could also use memset but meh, it only runs once, it's fine
+
     for (uint64_t x = 0; x < con_env->grid_size[0]; x++)
     {
         for (uint64_t y = 0; y < con_env->grid_size[1]; y++)
@@ -211,6 +211,12 @@ uint32_t glider_start(convey_enviroment *con_env)
     }
 
     // Add a glider
+    con_env->grid[21][30] = 1;
+    con_env->grid[22][31] = 1;
+    con_env->grid[20][32] = 1;
+    con_env->grid[21][32] = 1;
+    con_env->grid[22][32] = 1;
+
     con_env->grid[1][0] = 1;
     con_env->grid[2][1] = 1;
     con_env->grid[0][2] = 1;
@@ -250,29 +256,32 @@ uint32_t renderer(sdl_enviroment *sdl_env, convey_enviroment *con_env)
         {
             if (con_env->grid[x][y])
             {
-                sdl_env->rects[x * con_env->grid_size[1] + y].x = GRID_TO_WINDOW_SCALE * x;
-                sdl_env->rects[x * con_env->grid_size[1] + y].y = GRID_TO_WINDOW_SCALE * y;
+                // sdl_env->rects[x * con_env->grid_size[1] + y].x = GRID_TO_WINDOW_SCALE * x;
+                // sdl_env->rects[x * con_env->grid_size[1] + y].y = GRID_TO_WINDOW_SCALE * y;
                 sdl_env->rects[x * con_env->grid_size[1] + y].w = GRID_TO_WINDOW_SCALE;
                 sdl_env->rects[x * con_env->grid_size[1] + y].h = GRID_TO_WINDOW_SCALE;
             }
             else
             {
-                sdl_env->rects[x * con_env->grid_size[1] + y].x = 0;
-                sdl_env->rects[x * con_env->grid_size[1] + y].y = 0;
+                // sdl_env->rects[x * con_env->grid_size[1] + y].x = 0;
+                // sdl_env->rects[x * con_env->grid_size[1] + y].y = 0;
                 sdl_env->rects[x * con_env->grid_size[1] + y].w = 0;
                 sdl_env->rects[x * con_env->grid_size[1] + y].h = 0;
             }
         }
     }
 
+    // Full Screen to 10 10 10 = "Black"
     SDL_SetRenderDrawColor(sdl_env->renderer, 10, 10, 10, 255);
     SDL_RenderClear(sdl_env->renderer);
 
+    // Fill rectangles 10 100 10 = green
     SDL_SetRenderDrawColor(sdl_env->renderer, 10, 100, 10, 255);
     SDL_RenderFillRects(sdl_env->renderer,
                         sdl_env->rects,
                         con_env->grid_size[2]);
 
+    // Outline rectangles 10 10 100 = blue
     SDL_SetRenderDrawColor(sdl_env->renderer, 10, 10, 100, 255);
     SDL_RenderDrawRects(sdl_env->renderer,
                         sdl_env->rects,
@@ -398,18 +407,26 @@ uint32_t Init(sdl_enviroment *sdl_env, convey_enviroment *con_env, char **argv)
         fprintf(stderr, "Memory allocation failed for sdl_env->rects\n");
         return 6;
     }
+    for (uint32_t x = 0; x < con_env->grid_size[0]; x++)
+    {
+        for (uint32_t y = 0; y < con_env->grid_size[1]; y++)
+        {
+            sdl_env->rects[x * con_env->grid_size[1] + y].x = GRID_TO_WINDOW_SCALE * x;
+            sdl_env->rects[x * con_env->grid_size[1] + y].y = GRID_TO_WINDOW_SCALE * y;
+        }
+    }
 
     sdl_env->frameskips = FRAMESKIPS;
 
     // Prepare Convey
-    con_env->grid = (uint8_t **) malloc(con_env->grid_size[0] * sizeof(uint8_t *));
+    con_env->grid = (uint8_t **) malloc(con_env->grid_size[2] * sizeof(uint8_t));
     if (!con_env->grid)
     {
         fprintf(stderr, "Memory allocation failed for con_env->grid\n");
         return 7;
     }
 
-    con_env->swp_grid = (uint8_t **) malloc(con_env->grid_size[0] * sizeof(uint8_t *));
+    con_env->swp_grid = (uint8_t **) malloc(con_env->grid_size[2] * sizeof(uint8_t));
     if (!con_env->swp_grid)
     {
         fprintf(stderr, "Memory allocation failed for con_env->swp_grid\n");

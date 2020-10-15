@@ -1,6 +1,6 @@
 TARGET = main
 CFLAGS = -g -Wextra
-PARAMS = 50 70
+PARAMS = 128 96
 LIBS = -lm -lpthread -lSDL2
 
 HEADERS = $(wildcard *.h)
