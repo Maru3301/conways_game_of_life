@@ -15,10 +15,16 @@
 #define MSPT 1000 / FPS
 #define FRAMESKIPS 100
 #define SKIPS_INCREMENT 10
+#define MUTATION_THREASHOLD 3
 
 #define RUNNING 0x00
 #define PAUSE 0x11
 #define QUIT_GAME 0xFF
+
+
+typedef struct {
+    float x, y;
+} vector2;
 
 typedef struct{
     uint64_t grid_size[3];
@@ -52,11 +58,24 @@ uint32_t convey_advance_generation(convey_enviroment *con_env);
 uint32_t Init(sdl_enviroment *sdl_env, convey_enviroment *con_env, char **argv);
 uint32_t Exit(sdl_enviroment *sdl_env, convey_enviroment *con_env);
 
+// Utilities
 uint32_t str_to_int(char *string, uint64_t *number);
+uint32_t coords_rel_to_abs(convey_enviroment *con_env, int64_t *x, int64_t *y, int64_t x_off, int64_t y_off);
+float interpolate(float a0, float a1, float weight);
+vector2 randomGradient(int ix, int iy);
+float dotGridGradient(int ix, int iy, float x, float y);
+float perlin(float x, float y);
 
 // Various Init functions for different start scenarios
 uint32_t blunt_random(convey_enviroment *con_env);
 uint32_t glider_start(convey_enviroment *con_env);
+uint32_t acorn_start(convey_enviroment *con_env);
+uint32_t testing_start(convey_enviroment *con_env);
+uint32_t perlin_start(convey_enviroment *con_env, float density);
+
+// Various Rule functions
+uint32_t ruleset_classic(convey_enviroment *con_env);
+uint32_t ruleset_testing(convey_enviroment *con_env);
 
 /*
 Main
@@ -132,6 +151,19 @@ uint32_t convey_advance_generation(convey_enviroment *con_env)
     // Then initialize all to 0 and wait for life to form
     // Need to adjust the rules tho, else it would die
 
+    ruleset_classic(con_env);
+    // ruleset_testing(con_env);
+
+    // Swap the arrays in the end
+    uint8_t **temp = con_env->swp_grid;
+    con_env->swp_grid = con_env->grid;
+    con_env->grid = temp;
+    return 0;
+}
+
+// Various Rule functions
+uint32_t ruleset_classic(convey_enviroment *con_env)
+{
     int32_t sum;
     int64_t x_index;
     int64_t y_index;
@@ -144,11 +176,11 @@ uint32_t convey_advance_generation(convey_enviroment *con_env)
 
             for (int64_t i = -1; i <= 1; i++)
             {
-                x_index = (x + i + con_env->grid_size[0]) % con_env->grid_size[0];
-
                 for (int64_t j = -1; j <= 1; j++)
                 {
-                    y_index = (y + j + con_env->grid_size[1]) % con_env->grid_size[1];
+                    x_index = x;
+                    y_index = y;
+                    coords_rel_to_abs(con_env, &x_index, &y_index, i, j);
 
                     sum += con_env->grid[x_index][y_index];
                 }
@@ -171,10 +203,50 @@ uint32_t convey_advance_generation(convey_enviroment *con_env)
         }
     }
 
-    // Swap the arrays in the end
-    uint8_t **temp = con_env->swp_grid;
-    con_env->swp_grid = con_env->grid;
-    con_env->grid = temp;
+    return 0;
+}
+
+uint32_t ruleset_testing(convey_enviroment *con_env)
+{
+    int32_t sum;
+    int64_t x_index;
+    int64_t y_index;
+
+    for (uint64_t x = 0; x < con_env->grid_size[0]; x++)
+    {
+        for (uint64_t y = 0; y < con_env->grid_size[1]; y++)
+        {
+            sum = 0;
+
+            for (int64_t i = -1; i <= 1; i++)
+            {
+                for (int64_t j = -1; j <= 1; j++)
+                {
+                    x_index = x;
+                    y_index = y;
+                    coords_rel_to_abs(con_env, &x_index, &y_index, i, j);
+
+                    sum += con_env->grid[x_index][y_index];
+                }
+            }
+
+            sum -= con_env->grid[x][y];
+
+            if (sum < 2 | sum > 3)
+            {
+                con_env->swp_grid[x][y] = 0;
+            }
+            else if (sum == 3)
+            {
+                con_env->swp_grid[x][y] = 1;
+            }
+            else
+            {
+                con_env->swp_grid[x][y] = con_env->grid[x][y];
+            }
+        }
+    }
+
     return 0;
 }
 
@@ -182,8 +254,22 @@ uint32_t convey_init(convey_enviroment *con_env)
 {
     // maybe later perlin noise?
 
+    // Make sure all is zero = dead
+    // Could also use memset but meh, it only runs once, it's fine
+
+    for (uint64_t x = 0; x < con_env->grid_size[0]; x++)
+    {
+        for (uint64_t y = 0; y < con_env->grid_size[1]; y++)
+        {
+            con_env->grid[x][y] = 0;
+        }
+    }
+
+    perlin_start(con_env, 0.9);
     // blunt_random(con_env);
-    glider_start(con_env);
+    // glider_start(con_env);
+    // acorn_start(con_env);
+    // testing_start(con_env);
 
     // Copy once to swp_grid so we're on the same page
     for (uint64_t x = 0; x < con_env->grid_size[0]; x++)
@@ -197,39 +283,6 @@ uint32_t convey_init(convey_enviroment *con_env)
     return 0;
 }
 
-uint32_t glider_start(convey_enviroment *con_env)
-{
-    // Make sure all is zero = dead
-    // Could also use memset but meh, it only runs once, it's fine
-
-    for (uint64_t x = 0; x < con_env->grid_size[0]; x++)
-    {
-        for (uint64_t y = 0; y < con_env->grid_size[1]; y++)
-        {
-            con_env->grid[x][y] = 0;
-        }
-    }
-
-    // Add a glider
-    con_env->grid[21][30] = 1;
-    con_env->grid[22][31] = 1;
-    con_env->grid[20][32] = 1;
-    con_env->grid[21][32] = 1;
-    con_env->grid[22][32] = 1;
-
-    con_env->grid[1][0] = 1;
-    con_env->grid[2][1] = 1;
-    con_env->grid[0][2] = 1;
-    con_env->grid[1][2] = 1;
-    con_env->grid[2][2] = 1;
-
-    // con_env->grid[5][6] = 1;
-    // con_env->grid[6][5] = 1;
-    // con_env->grid[7][6] = 1;
-
-    return 0;
-}
-
 // Various Init functions starting here
 uint32_t blunt_random(convey_enviroment *con_env)
 {
@@ -238,6 +291,60 @@ uint32_t blunt_random(convey_enviroment *con_env)
         for (uint64_t y = 0; y < con_env->grid_size[1]; y++)
         {
             con_env->grid[x][y] = random() % 2;
+        }
+    }
+
+    return 0;
+}
+
+uint32_t perlin_start(convey_enviroment *con_env, float density)
+{
+    for (uint64_t x = 0; x < con_env->grid_size[0]; x++)
+    {
+        for (uint64_t y = 0; y < con_env->grid_size[1]; y++)
+        {
+            con_env->grid[x][y] = round((density + perlin((float) x + 0.5, (float) y + 0.5)) / 2);
+        }
+    }
+
+    return 0;
+}
+
+uint32_t glider_start(convey_enviroment *con_env)
+{
+    // Add a glider
+    con_env->grid[1][0] = 1;
+    con_env->grid[2][1] = 1;
+    con_env->grid[0][2] = 1;
+    con_env->grid[1][2] = 1;
+    con_env->grid[2][2] = 1;
+
+    return 0;
+}
+
+uint32_t acorn_start(convey_enviroment *con_env)
+{
+    uint64_t x_center = con_env->grid_size[0] / 2;
+    uint64_t y_center = con_env->grid_size[1] / 2;
+
+    con_env->grid[x_center][y_center] = 1;
+    con_env->grid[x_center + 1][y_center - 1] = 1;
+    con_env->grid[x_center + 2][y_center - 1] = 1;
+    con_env->grid[x_center + 3][y_center - 1] = 1;
+    con_env->grid[x_center - 2][y_center - 1] = 1;
+    con_env->grid[x_center - 3][y_center - 1] = 1;
+    con_env->grid[x_center - 2][y_center + 1] = 1;
+
+    return 0;
+}
+
+uint32_t testing_start(convey_enviroment *con_env)
+{
+    for (uint64_t x = 0; x < con_env->grid_size[0]; x++)
+    {
+        for (uint64_t y = 0; y < con_env->grid_size[1]; y++)
+        {
+            con_env->grid[x][y] = (x + y) % 2;
         }
     }
 
@@ -281,8 +388,8 @@ uint32_t renderer(sdl_enviroment *sdl_env, convey_enviroment *con_env)
                         sdl_env->rects,
                         con_env->grid_size[2]);
 
-    // Outline rectangles 10 10 100 = blue
-    SDL_SetRenderDrawColor(sdl_env->renderer, 10, 10, 100, 255);
+    // Outline rectangles 30 10 100 = purple
+    SDL_SetRenderDrawColor(sdl_env->renderer, 30, 10, 100, 255);
     SDL_RenderDrawRects(sdl_env->renderer,
                         sdl_env->rects,
                         con_env->grid_size[2]);
@@ -468,6 +575,67 @@ uint32_t Exit(sdl_enviroment *sdl_env, convey_enviroment *con_env)
 Utilities
 str_to_int: convertes a (max 19 digit) string-number into a uint64_t
 */
+
+uint32_t coords_rel_to_abs(convey_enviroment *con_env, int64_t *x, int64_t *y, int64_t x_off, int64_t y_off)
+{
+    *x = (*x + x_off + con_env->grid_size[0]) % con_env->grid_size[0];
+    *y = (*y + y_off + con_env->grid_size[1]) % con_env->grid_size[1];
+
+    return 0;
+}
+
+// Create random direction vector
+vector2 randomGradient(int ix, int iy) {
+    // Random float. No precomputed gradients mean this works for any number of grid coordinates
+    float random = 2920.f * sin(ix * 21942.f + iy * 171324.f + 8912.f) * cos(ix * 23157.f * iy * 217832.f + 9758.f);
+    return (vector2) { .x = cos(random), .y = sin(random) };
+}
+
+// interpolates between a0 and a1, weight e [0.0, 1.0]
+float interpolate(float a0, float a1, float weight) {
+    return pow(weight, 2.0) * (3.0 - 2.0 * weight) * (a1 - a0) + a0;
+}
+
+// Computes the dot product of the distance and gradient vectors.
+float dotGridGradient(int ix, int iy, float x, float y) {
+    // Get gradient from integer coordinates
+    vector2 gradient = randomGradient(ix, iy);
+
+    // Compute the distance vector
+    float dx = x - (float)ix;
+    float dy = y - (float)iy;
+
+    // Compute the dot-product
+    return (dx*gradient.x + dy*gradient.y);
+}
+
+// Compute Perlin noise at coordinates x, y
+float perlin(float x, float y) {
+    // Determine grid cell coordinates
+    int x0 = (int)x;
+    int x1 = x0 + 1;
+    int y0 = (int)y;
+    int y1 = y0 + 1;
+
+    // Determine interpolation weights
+    // Could also use higher order polynomial/s-curve here
+    float sx = x - (float)x0;
+    float sy = y - (float)y0;
+
+    // Interpolate between grid point gradients
+    float n0, n1, ix0, ix1, value;
+
+    n0 = dotGridGradient(x0, y0, x, y);
+    n1 = dotGridGradient(x1, y0, x, y);
+    ix0 = interpolate(n0, n1, sx);
+
+    n0 = dotGridGradient(x0, y1, x, y);
+    n1 = dotGridGradient(x1, y1, x, y);
+    ix1 = interpolate(n0, n1, sx);
+
+    value = interpolate(ix0, ix1, sy);
+    return value;
+}
 
 uint32_t str_to_int(char *string, uint64_t *number)
 {
