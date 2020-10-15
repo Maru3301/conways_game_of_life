@@ -1,6 +1,6 @@
 TARGET = main
 CFLAGS = -g -Wextra
-PARAMS = 200 120
+PARAMS = 200 120 perlin 125
 LIBS = -lm -lpthread -lSDL2
 
 HEADERS = $(wildcard *.h)

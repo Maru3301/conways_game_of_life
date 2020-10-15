@@ -52,11 +52,12 @@ typedef struct{
 uint32_t renderer(sdl_enviroment *sdl_env, convey_enviroment *con_env);
 uint32_t event_handler(SDL_Event e, uint8_t *flag, uint32_t *frameskips);
 
-uint32_t convey_init(convey_enviroment *con_env);
+uint32_t convey_init(convey_enviroment *con_env, char **argv, int argc);
 uint32_t convey_advance_generation(convey_enviroment *con_env);
 
-uint32_t Init(sdl_enviroment *sdl_env, convey_enviroment *con_env, char **argv);
+uint32_t Init(sdl_enviroment *sdl_env, convey_enviroment *con_env, char **argv, int argc);
 uint32_t Exit(sdl_enviroment *sdl_env, convey_enviroment *con_env);
+void print_usage(char *caller);
 
 // Utilities
 uint32_t str_to_int(char *string, uint64_t *number);
@@ -83,16 +84,10 @@ Main
 
 int main(int argc, char **argv)
 {
-    if (argc != 3)
-    {
-        fprintf(stderr, "Usage: %s <Cells x> <Cells y>\n", argv[0]);
-        return 1;
-    }
-
     sdl_enviroment *sdl_env = (sdl_enviroment *) malloc(sizeof(sdl_enviroment));
     convey_enviroment *con_env = (convey_enviroment *) malloc(sizeof(convey_enviroment));
 
-    if (Init(sdl_env, con_env, argv))
+    if (Init(sdl_env, con_env, argv, argc))
         return 2;
 
     printf("Grid of size %ld by %ld\n", con_env->grid_size[0], con_env->grid_size[1]);
@@ -250,10 +245,8 @@ uint32_t ruleset_testing(convey_enviroment *con_env)
     return 0;
 }
 
-uint32_t convey_init(convey_enviroment *con_env)
+uint32_t convey_init(convey_enviroment *con_env, char **argv, int argc)
 {
-    // maybe later perlin noise?
-
     // Make sure all is zero = dead
     // Could also use memset but meh, it only runs once, it's fine
 
@@ -265,10 +258,48 @@ uint32_t convey_init(convey_enviroment *con_env)
         }
     }
 
-    perlin_start(con_env, 0.9);
-    // blunt_random(con_env);
-    // glider_start(con_env);
-    // acorn_start(con_env);
+    uint64_t density;
+
+    if (!strcmp("blunt_random", argv[3]))
+    {
+        printf("Using initializer blunt_random\n");
+        blunt_random(con_env);
+    }
+    else if (!strcmp("perlin", argv[3]))
+    {
+        if (argc != 5)
+        {
+            fprintf(stderr, "Initializer perlin: density not specified\n");
+            return 1;
+        }
+        if (str_to_int(argv[4], &density))
+        {
+            return 2;
+        }
+        if (density > 255)
+        {
+            fprintf(stderr, "Density is too large: %ld; should be 0 <= density <= 255\n", density);
+            return 3;
+        }
+        printf("Using initializer perlin with density %ld\n", density);
+        perlin_start(con_env, ((float) density) / 255);
+    }
+    else if (!strcmp("glider", argv[3]))
+    {
+        printf("Using initializer glider\n");
+        glider_start(con_env);
+    }
+    else if (!strcmp("acorn", argv[3]))
+    {
+        printf("Using initializer acorn\n");
+        acorn_start(con_env);
+    }
+    else
+    {
+        fprintf(stderr, "Unknown Initializer: %s\n", argv[3]);
+        return 1;
+    }
+
     // testing_start(con_env);
 
     // Copy once to swp_grid so we're on the same page
@@ -299,11 +330,12 @@ uint32_t blunt_random(convey_enviroment *con_env)
 
 uint32_t perlin_start(convey_enviroment *con_env, float density)
 {
+    printf("%f\n", density);
     for (uint64_t x = 0; x < con_env->grid_size[0]; x++)
     {
         for (uint64_t y = 0; y < con_env->grid_size[1]; y++)
         {
-            con_env->grid[x][y] = round((density + perlin((float) x + 0.5, (float) y + 0.5)) / 2);
+            con_env->grid[x][y] = round((1 + perlin((float) x + density, (float) y + density)) / 2);
         }
     }
 
@@ -449,10 +481,31 @@ uint32_t event_handler(SDL_Event e, uint8_t *flag, uint32_t *frameskips)
 /*
 Init
 */
+void print_usage(char *caller)
+{
+    fprintf(stderr, "Usage: %s <Cells x> <Cells y> <initializer> <initializer params>\n", caller);
+    fprintf(stderr, "\tinitializer params is one of:\n");
+    fprintf(stderr, "\t\tblunt_random\n");
+    fprintf(stderr, "\t\tperlin <density>\tdensity is a number between 0 and 255 (inclusive)\n");
+    fprintf(stderr, "\t\tglider\n");
+    fprintf(stderr, "\t\tacorn\n");
 
-uint32_t Init(sdl_enviroment *sdl_env, convey_enviroment *con_env, char **argv)
+    return;
+}
+
+uint32_t Init(sdl_enviroment *sdl_env, convey_enviroment *con_env, char **argv, int argc)
 {
     // Get everything prepared
+    if (argc < 4)
+    {
+        print_usage(argv[0]);
+        return 1;
+    }
+    else if (argc > 5)
+    {
+        print_usage(argv[0]);
+        return 1;
+    }
 
     if (str_to_int(argv[1], &con_env->grid_size[0]))
     {
@@ -546,7 +599,11 @@ uint32_t Init(sdl_enviroment *sdl_env, convey_enviroment *con_env, char **argv)
         con_env->swp_grid[x] = (uint8_t *) malloc(con_env->grid_size[1] * sizeof(uint8_t));
     }
 
-    convey_init(con_env);
+    if (convey_init(con_env, argv, argc))
+    {
+        print_usage(argv[0]);
+        return 9;
+    }
 
     return 0;
 }
